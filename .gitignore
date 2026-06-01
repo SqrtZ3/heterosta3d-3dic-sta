@@ -1,0 +1,24 @@
+# compiled driver
+sta_driver
+sta_driver.exe
+*.o
+*.obj
+*.pdb
+build/
+build_err.txt
+
+# python
+__pycache__/
+*.pyc
+
+# regenerable Stage-1 / scaling intermediates
+designs/gcd_3d/
+designs/scaled/
+
+# scratch
+task_text.txt
+
+# keep deliverables tracked:
+#   results/*.csv, results/*.rpt, results/*.txt   (timing reports + data)
+#   report/figs/*.png                              (figures)
+#   report/*.pdf                                   (final report)
