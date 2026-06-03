@@ -1,0 +1,22 @@
+/*
+ * asap7_ss_placeholder.lib  --  PLACEHOLDER Liberty for the TOP die (SS corner)
+ *
+ *  This is NOT a real timing library.  It exists so the example commands and
+ *  the Makefile are self-consistent when building against the CPU stub (which
+ *  does not parse .lib files).  For graded runs, REPLACE the --top-lib path
+ *  with a real Slow-Slow ASAP7 (or Sky130) .lib -- see pdk/README.md.
+ *
+ *  Heterogeneous requirement: TOP die = Slow-Slow (worst-case slow) corner.
+ */
+library (asap7_ss_placeholder) {
+  technology (cmos);
+  delay_model : table_lookup;
+  time_unit : "1ns";
+  voltage_unit : "1V";
+  current_unit : "1mA";
+  capacitive_load_unit (1, ff);
+  nom_process : 1.0;
+  nom_voltage : 0.63;   /* SS: low voltage */
+  nom_temperature : 125.0;  /* SS: high temperature */
+  /* cell () { ... } definitions go here in the real library */
+}
