@@ -1,0 +1,4 @@
+HeteroSTA3D single-corner report
+corner=ss_ff device=0 C_hbt=1fF R_hbt=0.05kOhm
+Setup WNS=-0.273337 TNS=-0.362674
+Hold  WNS=0.227227 TNS=0

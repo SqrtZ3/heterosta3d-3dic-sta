@@ -1,0 +1,25 @@
+==========================================================
+  HeteroSTA3D [STUB] Setup (max) path report   corner=ss_ff
+  clock period T = 1 ns
+==========================================================
+  Setup WNS = -0.273337 ns   TNS = -0.362674 ns
+
+  Worst Setup path (endpoint -> startpoint):
+    reg_r_bottom/D   arr=1.24334 ns
+    g13_top/Z   arr=1.23278 ns
+    g13_top/A   arr=1.13978 ns
+    g12_top/ZN   arr=1.00178 ns
+    g12_top/A   arr=0.86678 ns
+    g11_top/ZN   arr=0.858155 ns
+    g11_top/B   arr=0.768155 ns
+    g9_top/ZN   arr=0.748749 ns
+    g9_top/B   arr=0.651249 ns
+    g4_top/ZN   arr=0.476593 ns
+    g4_top/B   arr=0.334093 ns
+    g3_top/ZN   arr=0.325468 ns
+    g3_top/A   arr=0.235468 ns
+    g2_top/ZN   arr=0.200968 ns
+    g2_top/B   arr=0.0959679 ns
+    reg_b_bottom/Q   arr=0.048 ns
+
+  (STUB output -- replace with the real engine for graded runs)
