@@ -1,0 +1,48 @@
+# CI: build + run the FULL pipeline against the CPU stub on every push.
+# Needs no GPU and no license -> runs on free GitHub-hosted runners.
+# This proves the whole flow (Stage 1->4 + plots + report) stays green, and the
+# uploaded artifacts are real evidence the project works end-to-end.
+name: ci-stub-pipeline
+
+on:
+  push:
+    branches: [ main, master, "stage-*" ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  stub-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          sudo apt-get update && sudo apt-get install -y g++ make
+          python -m pip install --upgrade pip
+          pip install numpy pandas seaborn matplotlib reportlab
+
+      - name: Build driver (stub)
+        run: make build USE_STUB=1
+
+      - name: Run full pipeline (Stage 1-4 + plots + report)
+        run: |
+          make stage1
+          make stage2
+          make stage3
+          make stage4
+          make plots
+          make report
+
+      - name: Upload results + report
+        uses: actions/upload-artifact@v4
+        with:
+          name: heterosta3d-outputs
+          path: |
+            results/
+            report/figs/
+            report/report.pdf

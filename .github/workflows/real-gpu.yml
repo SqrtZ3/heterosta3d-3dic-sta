@@ -1,0 +1,65 @@
+# TEMPLATE: real graded run on the licensed HeteroSTA3D engine + a real GPU.
+#
+# This is manual-only (workflow_dispatch) and expects a SELF-HOSTED runner with
+# a GPU + CUDA, plus the vendor library/license provided via repo secrets.
+# Adapt the `runs-on` label and the provisioning step to your GPU platform.
+# (If your platform is GitLab CI / a Chinese GPU cloud rather than GitHub
+#  Actions, the logic below maps 1:1 -- it is just `./run_all.sh` with USE_STUB=0.)
+name: real-gpu-run
+
+on:
+  workflow_dispatch:
+    inputs:
+      devices:
+        description: "Device list for Stage 4 (e.g. cpu,0,1)"
+        default: "cpu,0"
+
+jobs:
+  real-run:
+    # Label your GPU runner accordingly; on a non-GitHub platform this whole
+    # job becomes the pipeline's single GPU stage.
+    runs-on: [self-hosted, gpu]
+    env:
+      H3D_DIR: ${{ github.workspace }}/heterosta3d
+      CUDA_DIR: /usr/local/cuda
+      TOPLIB: pdk/asap7_SS.lib          # <- point at the real ASAP7 SS lib
+      BOTLIB: pdk/asap7_FF.lib          # <- point at the real ASAP7 FF lib
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Provision HeteroSTA3D library + license
+        # The vendor .so + license are NOT in git. Supply them here, e.g.:
+        #   - decode from a base64 secret, or
+        #   - download a cached/private artifact, or
+        #   - use a prebuilt container image that already contains them.
+        run: |
+          mkdir -p "$H3D_DIR"
+          echo "$H3D_TARBALL_B64" | base64 -d > /tmp/h3d.tar.gz
+          tar -xzf /tmp/h3d.tar.gz -C "$H3D_DIR" --strip-components=1
+          mkdir -p "$HOME/.heterosta3d"
+          echo "$H3D_LIC_2D" > "$HOME/.heterosta3d/lic_2d"
+          echo "$H3D_LIC_3D" > "$HOME/.heterosta3d/lic_3d"
+        env:
+          H3D_TARBALL_B64: ${{ secrets.H3D_TARBALL_B64 }}
+          H3D_LIC_2D: ${{ secrets.H3D_LIC_2D }}
+          H3D_LIC_3D: ${{ secrets.H3D_LIC_3D }}
+
+      - name: Sanity check GPU
+        run: nvidia-smi || true
+
+      - name: Build + run against the REAL engine
+        run: |
+          export LD_LIBRARY_PATH="$H3D_DIR/lib:$LD_LIBRARY_PATH"
+          python -m pip install numpy pandas seaborn matplotlib reportlab
+          USE_STUB=0 H3D_DIR="$H3D_DIR" CUDA_DIR="$CUDA_DIR" \
+            TOPLIB="$TOPLIB" BOTLIB="$BOTLIB" \
+            DEVICES="${{ github.event.inputs.devices }}" \
+            ./run_all.sh
+
+      - name: Upload graded artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: heterosta3d-real-outputs
+          path: |
+            results/
+            report/report.pdf

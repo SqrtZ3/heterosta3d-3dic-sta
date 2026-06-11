@@ -1,0 +1,92 @@
+# ===========================================================================
+#  .cnb.yml  --  cnb.cool (腾讯云原生构建) pipelines
+# ===========================================================================
+#  Structure:  <branch>: <event>: [ pipelines ] -> stages -> script
+#  Docs: https://docs.cnb.cool/zh/build/configuration.html
+#        https://docs.cnb.cool/zh/build/build-node.html   (GPU node)
+#
+#  Two pipelines:
+#    main / push      -> STUB pipeline (no GPU, no license): validates Stage 1-4
+#    gpu-run / push   -> REAL pipeline on a GPU node (runner.tags GPU)
+# ===========================================================================
+
+# --- Stub validation on every push to main (no GPU needed) -----------------
+main:
+  push:
+    - name: stub-pipeline
+      docker:
+        image: python:3.11
+      stages:
+        - name: deps
+          script: |
+            apt-get update && apt-get install -y g++ make
+            pip install numpy pandas seaborn matplotlib reportlab
+        - name: build (stub)
+          script: make build USE_STUB=1
+        - name: stage1 split
+          script: make stage1
+        - name: stage2 single-corner
+          script: make stage2
+        - name: stage3 sweep
+          script: make stage3
+        - name: stage4 devices + scaling
+          script: make stage4
+        - name: plots + report
+          script: |
+            make plots
+            make report
+
+# --- Real graded run on a GPU node -----------------------------------------
+#  Trigger by pushing to the `gpu-run` branch (or from the cnb web console).
+#  GPU node tag + memory limits: see docs/build-node.html.  GPU is attached to
+#  the job container via `--gpus $(cnb-gpu)` (cnb-gpu CLI returns the card id):
+#     https://cnb.cool/cnb/cool/cnb-gpu-cli
+gpu-run:
+  push:
+    - name: real-gpu-pipeline
+      runner:
+        tags: cnb:arch:amd64:gpu      # GPU build node (16 vCPU, <=48GB GPU mem shared)
+      docker:
+        # Match the engine's CUDA (release targets CUDA 11 -> use an 11.x image).
+        image: nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
+      env:
+        H3D_DIR: /workspace/heterosta3d
+        CUDA_DIR: /usr/local/cuda
+        TOPLIB: pdk/asap7_SS.lib        # <- real ASAP7 SS lib (top die)
+        BOTLIB: pdk/asap7_FF.lib        # <- real ASAP7 FF lib (bottom die)
+        DEVICES: cpu,0
+      stages:
+        - name: gpu check
+          script: nvidia-smi
+        - name: provision engine + license
+          # The vendor .so + license are NOT in git. Provide them here via one of:
+          #   * cnb imports/env-file secrets (docs: build/grammar.html#imports)
+          #   * download from object storage (COS) with a token in env
+          #   * a prebuilt image that already bundles them
+          script: |
+            mkdir -p "$H3D_DIR"
+            echo "TODO: fetch heterosta3d release tarball -> $H3D_DIR (lib/, include/)"
+            echo "TODO: write license files to ~/.heterosta3d/"
+        - name: deps
+          script: |
+            apt-get update && apt-get install -y g++ make python3 python3-pip git
+            pip3 install numpy pandas seaborn matplotlib reportlab
+        - name: build (real)
+          script: make build USE_STUB=0 H3D_DIR="$H3D_DIR" CUDA_DIR="$CUDA_DIR"
+        - name: run all stages (real engine)
+          script: |
+            export LD_LIBRARY_PATH="$H3D_DIR/lib:$LD_LIBRARY_PATH"
+            make stage1
+            make stage2 TOPLIB="$TOPLIB" BOTLIB="$BOTLIB"
+            make stage3 TOPLIB="$TOPLIB" BOTLIB="$BOTLIB"
+            make stage4 TOPLIB="$TOPLIB" BOTLIB="$BOTLIB" DEVICES="$DEVICES"
+            make plots
+            make report
+        - name: publish results back to repo
+          # cnb has no GitHub-style artifact upload; commit outputs to a branch.
+          script: |
+            git config user.name "cnb-ci"
+            git config user.email "ci@cnb.cool"
+            git add -f results report/figs report/report.pdf
+            git commit -m "ci: real GPU run outputs [skip ci]" || echo "nothing to commit"
+            git push origin HEAD:refs/heads/results-gpu || echo "set push token to enable"
