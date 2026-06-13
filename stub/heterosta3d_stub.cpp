@@ -36,6 +36,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -151,9 +152,11 @@ namespace {
 
 // ---- tiny Verilog parser (gate-level structural) -------------------------
 std::string strip_comments(std::string s) {
-    s = std::regex_replace(s, std::regex(R"(/\*.*?\*/)"), " ",
-                           std::regex_constants::format_default);
-    // block comments across newlines:
+    // Strip /* ... */ (including multi-line) and // comments in ONE manual
+    // pass.  We intentionally avoid std::regex over the whole file: libstdc++'s
+    // regex recurses on the match and stack-overflows on large netlists, which
+    // is exactly what failed CI at the k=128 scaling size (clang/libc++ on the
+    // dev machine tolerated it; g++ on the CI runner did not).
     {
         std::string out;
         out.reserve(s.size());
@@ -256,22 +259,28 @@ bool heterosta3d_read_netlist(Heterosta3D* sta, const char* path) {
     buf << in.rdbuf();
     std::string text = strip_comments(buf.str());
 
-    // largest module body
-    std::regex modre(R"(\bmodule\b[\s\S]*?\bendmodule\b)");
-    std::smatch m;
+    // Largest module body, found by manual string scan (NO whole-file regex --
+    // see the note in strip_comments).  For each standalone `module` keyword we
+    // take the text between the header ';' and the matching `endmodule`.
     std::string body;
     {
-        auto begin = std::sregex_iterator(text.begin(), text.end(), modre);
-        auto end = std::sregex_iterator();
-        size_t best = 0;
-        for (auto it = begin; it != end; ++it) {
-            std::string blk = it->str();
-            size_t semi = blk.find(';');
-            size_t emod = blk.rfind("endmodule");
-            if (semi != std::string::npos && emod != std::string::npos && emod > semi) {
-                std::string b = blk.substr(semi + 1, emod - semi - 1);
-                if (b.size() > best) { best = b.size(); body = b; }
-            }
+        auto ident_char = [](char c) {
+            return std::isalnum((unsigned char)c) || c == '_';
+        };
+        size_t best = 0, pos = 0;
+        while (pos < text.size()) {
+            size_t mk = text.find("module", pos);
+            if (mk == std::string::npos) break;
+            bool lok = (mk == 0) || !ident_char(text[mk - 1]);          // not 'endmodule'/ident
+            bool rok = (mk + 6 >= text.size()) || !ident_char(text[mk + 6]);
+            if (!lok || !rok) { pos = mk + 6; continue; }
+            size_t semi = text.find(';', mk);
+            if (semi == std::string::npos) break;
+            size_t emod = text.find("endmodule", semi);
+            if (emod == std::string::npos) break;
+            std::string b = text.substr(semi + 1, emod - (semi + 1));
+            if (b.size() > best) { best = b.size(); body = b; }
+            pos = emod + 9;
         }
     }
     if (body.empty()) { std::cerr << "[stub] no module body\n"; return false; }
